@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Strategy Simulator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .results {
+            display: none;
+        }
+        .loading {
+            display: none;
+        }
+        .error {
+            display: none;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Trading Strategy Simulator</h1>
+        
+        <div class="card">
+            <div class="card-body">
+                <form id="strategyForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="initial_investment" class="form-label">Initial Investment ($)</label>
+                            <input type="number" class="form-control" id="initial_investment" name="initial_investment" required min="0" step="0.01">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="shares_per_trade" class="form-label">Shares per Trade (x)</label>
+                            <input type="number" class="form-control" id="shares_per_trade" name="shares_per_trade" required min="1">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="consecutive_days" class="form-label">Consecutive Days (y)</label>
+                            <input type="number" class="form-control" id="consecutive_days" name="consecutive_days" required min="1">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="stock_symbol" class="form-label">Stock Symbol</label>
+                            <input type="text" class="form-control" id="stock_symbol" name="stock_symbol" required placeholder="e.g., AAPL">
+                        </div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary">Analyze Strategy</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="loading text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p>Analyzing strategy...</p>
+        </div>
+        
+        <div class="error alert alert-danger" role="alert"></div>
+        
+        <div class="results">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Strategy Results</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Initial Investment:</strong> <span id="initial_investment_result"></span></p>
+                            <p><strong>Final Portfolio Value:</strong> <span id="final_value"></span></p>
+                            <p><strong>Total Return:</strong> <span id="total_return"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>S&P 500 Return:</strong> <span id="sp500_return"></span></p>
+                            <p><strong>Number of Trades:</strong> <span id="number_of_trades"></span></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Last 5 Trades</h5>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Action</th>
+                                    <th>Shares</th>
+                                    <th>Price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="last_trades"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Performance Comparison</h5>
+                    <div id="performance_plot"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#strategyForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                // Show loading, hide other sections
+                $('.loading').show();
+                $('.results').hide();
+                $('.error').hide();
+                
+                // Get form data
+                const formData = new FormData(this);
+                
+                // Send request
+                $.ajax({
+                    url: '/analyze',
+                    method: 'POST',
+                    data: formData,
+                    processData: false,
+                    contentType: false,
+                    success: function(response) {
+                        if (response.error) {
+                            $('.error').text(response.error).show();
+                            $('.loading').hide();
+                            return;
+                        }
+                        
+                        // Update results
+                        $('#initial_investment_result').text(response.initial_investment);
+                        $('#final_value').text(response.final_value);
+                        $('#total_return').text(response.total_return);
+                        $('#sp500_return').text(response.sp500_return);
+                        $('#number_of_trades').text(response.number_of_trades);
+                        
+                        // Update last trades table
+                        const lastTradesHtml = response.last_trades.map(trade => `
+                            <tr>
+                                <td>${trade.date}</td>
+                                <td>${trade.action}</td>
+                                <td>${trade.shares}</td>
+                                <td>${trade.price}</td>
+                            </tr>
+                        `).join('');
+                        $('#last_trades').html(lastTradesHtml);
+                        
+                        // Update performance plot
+                        $('#performance_plot').html(response.plot_html);
+                        
+                        // Show results
+                        $('.results').show();
+                        $('.loading').hide();
+                    },
+                    error: function(xhr, status, error) {
+                        $('.error').text('An error occurred while analyzing the strategy.').show();
+                        $('.loading').hide();
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html> 
