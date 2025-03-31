@@ -8,9 +8,10 @@ import mpld3
 __all__ = ['TradingStrategy']
 
 class TradingStrategy:
-    def __init__(self, initial_investment, shares_per_trade, consecutive_days, stock_symbol, start_date=None, end_date=None):
+    def __init__(self, initial_investment, shares_small_move, shares_large_move, consecutive_days, stock_symbol, start_date=None, end_date=None):
         self.initial_investment = initial_investment
-        self.shares_per_trade = shares_per_trade
+        self.shares_small_move = shares_small_move
+        self.shares_large_move = shares_large_move
         self.consecutive_days = consecutive_days
         self.stock_symbol = stock_symbol
         self.start_date = start_date
@@ -20,6 +21,18 @@ class TradingStrategy:
             'shares': 0,
             'trades': []
         }
+        
+    def calculate_price_movement(self, stock_data, start_idx):
+        """Calculate the percentage movement over consecutive days"""
+        start_price = stock_data['Close'].iloc[start_idx]
+        end_price = stock_data['Close'].iloc[start_idx + self.consecutive_days]
+        return ((end_price - start_price) / start_price) * 100
+        
+    def get_shares_to_trade(self, price_movement):
+        """Determine number of shares to trade based on price movement"""
+        if abs(price_movement) >= 5:
+            return self.shares_large_move
+        return self.shares_small_move
         
     def get_historical_data(self):
         """Fetch historical data for the stock and S&P 500"""
@@ -58,8 +71,9 @@ class TradingStrategy:
         last_price = None
         
         # Iterate through each day
-        for date, row in stock_data.iterrows():
-            current_price = row['Close']
+        for i in range(len(stock_data) - self.consecutive_days):
+            current_date = stock_data.index[i]
+            current_price = stock_data['Close'].iloc[i]
             
             if last_price is not None:
                 # Check if price increased or decreased
@@ -72,22 +86,31 @@ class TradingStrategy:
                 
                 # Trading logic
                 if consecutive_up_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Sell if we have shares
                     if self.portfolio['shares'] > 0:
-                        shares_to_sell = min(self.portfolio['shares'], self.shares_per_trade)
+                        shares_to_sell = min(self.portfolio['shares'], shares_to_trade)
                         self.portfolio['cash'] += shares_to_sell * current_price
                         self.portfolio['shares'] -= shares_to_sell
                         self.portfolio['trades'].append({
-                            'date': date.strftime('%Y-%m-%d'),
+                            'date': current_date.strftime('%Y-%m-%d'),
                             'action': 'SELL',
                             'shares': shares_to_sell,
-                            'price': f'${current_price:.2f}'
+                            'price': f'${current_price:.2f}',
+                            'price_movement': f'{price_movement:.2f}%'
                         })
                 
                 elif consecutive_down_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Buy if we have enough cash
                     shares_to_buy = min(
-                        self.shares_per_trade,
+                        shares_to_trade,
                         int(self.portfolio['cash'] / current_price)
                     )
                     if shares_to_buy > 0:
@@ -95,10 +118,11 @@ class TradingStrategy:
                         self.portfolio['cash'] -= cost
                         self.portfolio['shares'] += shares_to_buy
                         self.portfolio['trades'].append({
-                            'date': date.strftime('%Y-%m-%d'),
+                            'date': current_date.strftime('%Y-%m-%d'),
                             'action': 'BUY',
                             'shares': shares_to_buy,
-                            'price': f'${current_price:.2f}'
+                            'price': f'${current_price:.2f}',
+                            'price_movement': f'{price_movement:.2f}%'
                         })
             
             last_price = current_price
@@ -121,7 +145,8 @@ class TradingStrategy:
             'sp500_return': f'{sp500_return:.2f}%',
             'number_of_trades': len(self.portfolio['trades']),
             'last_trades': self.portfolio['trades'][-5:],
-            'plot_html': plot_html
+            'plot_html': plot_html,
+            'all_trades': self.portfolio['trades']
         }
     
     def calculate_portfolio_value_over_time(self, stock_data):
@@ -151,14 +176,14 @@ class TradingStrategy:
                 if consecutive_up_days >= self.consecutive_days:
                     # Sell if we have shares
                     if current_shares > 0:
-                        shares_to_sell = min(current_shares, self.shares_per_trade)
+                        shares_to_sell = min(current_shares, self.shares_small_move)
                         current_cash += shares_to_sell * current_price
                         current_shares -= shares_to_sell
                 
                 elif consecutive_down_days >= self.consecutive_days:
                     # Buy if we have enough cash
                     shares_to_buy = min(
-                        self.shares_per_trade,
+                        self.shares_small_move,
                         int(current_cash / current_price)
                     )
                     if shares_to_buy > 0:

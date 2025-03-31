@@ -16,7 +16,8 @@ def analyze():
     try:
         # Get form data
         initial_investment = float(request.form['initial_investment'])
-        shares_per_trade = int(request.form['shares_per_trade'])
+        shares_small_move = int(request.form['shares_small_move'])
+        shares_large_move = int(request.form['shares_large_move'])
         consecutive_days = int(request.form['consecutive_days'])
         stock_symbol = request.form['stock_symbol'].upper()
         start_date = request.form['start_date']
@@ -25,7 +26,8 @@ def analyze():
         # Create strategy instance
         strategy = TradingStrategy(
             initial_investment=initial_investment,
-            shares_per_trade=shares_per_trade,
+            shares_small_move=shares_small_move,
+            shares_large_move=shares_large_move,
             consecutive_days=consecutive_days,
             stock_symbol=stock_symbol,
             start_date=start_date,

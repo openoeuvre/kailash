@@ -47,27 +47,36 @@
                             <input type="number" class="form-control" id="initial_investment" name="initial_investment" required min="0" step="0.01">
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="shares_per_trade" class="form-label">Shares per Trade (x)</label>
-                            <input type="number" class="form-control" id="shares_per_trade" name="shares_per_trade" required min="1">
+                            <label for="consecutive_days" class="form-label">Consecutive Days (y)</label>
+                            <input type="number" class="form-control" id="consecutive_days" name="consecutive_days" required min="1">
                         </div>
                     </div>
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="consecutive_days" class="form-label">Consecutive Days (y)</label>
-                            <input type="number" class="form-control" id="consecutive_days" name="consecutive_days" required min="1">
+                            <label for="shares_small_move" class="form-label">Shares for < 5% Movement (x1)</label>
+                            <input type="number" class="form-control" id="shares_small_move" name="shares_small_move" required min="1">
+                            <small class="form-text text-muted">Number of shares to trade when price movement is less than 5%</small>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label for="stock_symbol" class="form-label">Stock Symbol</label>
-                            <input type="text" class="form-control" id="stock_symbol" name="stock_symbol" required placeholder="e.g., AAPL">
+                            <label for="shares_large_move" class="form-label">Shares for ≥ 5% Movement (x2)</label>
+                            <input type="number" class="form-control" id="shares_large_move" name="shares_large_move" required min="1">
+                            <small class="form-text text-muted">Number of shares to trade when price movement is 5% or greater</small>
                         </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
+                            <label for="stock_symbol" class="form-label">Stock Symbol</label>
+                            <input type="text" class="form-control" id="stock_symbol" name="stock_symbol" required placeholder="e.g., AAPL">
+                        </div>
+                        <div class="col-md-6 mb-3">
                             <label for="start_date" class="form-label">Start Date</label>
                             <input type="date" class="form-control" id="start_date" name="start_date" required>
                         </div>
+                    </div>
+
+                    <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="end_date" class="form-label">End Date</label>
                             <input type="date" class="form-control" id="end_date" name="end_date" required>
