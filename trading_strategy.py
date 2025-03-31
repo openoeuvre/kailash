@@ -160,8 +160,9 @@ class TradingStrategy:
         consecutive_down_days = 0
         last_price = None
         
-        for date, row in stock_data.iterrows():
-            current_price = row['Close']
+        for i in range(len(stock_data)):
+            current_date = stock_data.index[i]
+            current_price = stock_data['Close'].iloc[i]
             
             if last_price is not None:
                 # Check if price increased or decreased
@@ -174,16 +175,24 @@ class TradingStrategy:
                 
                 # Trading logic
                 if consecutive_up_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Sell if we have shares
                     if current_shares > 0:
-                        shares_to_sell = min(current_shares, self.shares_small_move)
+                        shares_to_sell = min(current_shares, shares_to_trade)
                         current_cash += shares_to_sell * current_price
                         current_shares -= shares_to_sell
                 
                 elif consecutive_down_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Buy if we have enough cash
                     shares_to_buy = min(
-                        self.shares_small_move,
+                        shares_to_trade,
                         int(current_cash / current_price)
                     )
                     if shares_to_buy > 0:
@@ -192,22 +201,27 @@ class TradingStrategy:
                         current_shares += shares_to_buy
             
             # Update portfolio value for this day
-            portfolio_values.loc[date, 'value'] = current_cash + (current_shares * current_price)
+            portfolio_values.loc[current_date, 'value'] = current_cash + (current_shares * current_price)
             last_price = current_price
         
+        # Calculate percentage change from initial investment
         portfolio_values['pct_change'] = ((portfolio_values['value'] - self.initial_investment) / self.initial_investment) * 100
         return portfolio_values
     
     def create_performance_plot(self, stock_data, portfolio_values, sp500_data):
-        """Create an interactive plot comparing strategy and S&P 500 returns"""
+        """Create an interactive plot comparing strategy, S&P 500, and stock returns"""
         try:
             # Calculate S&P 500 performance
             sp500_performance = ((sp500_data['Close'] - sp500_data['Close'].iloc[0]) / sp500_data['Close'].iloc[0]) * 100
+            
+            # Calculate stock performance
+            stock_performance = ((stock_data['Close'] - stock_data['Close'].iloc[0]) / stock_data['Close'].iloc[0]) * 100
             
             # Ensure dates are aligned
             common_dates = stock_data.index.intersection(sp500_data.index)
             portfolio_values = portfolio_values.loc[common_dates]
             sp500_performance = sp500_performance.loc[common_dates]
+            stock_performance = stock_performance.loc[common_dates]
             
             fig = go.Figure()
             
@@ -227,8 +241,16 @@ class TradingStrategy:
                 line=dict(color='red', dash='dash')
             ))
             
+            # Add stock return line
+            fig.add_trace(go.Scatter(
+                x=stock_performance.index,
+                y=stock_performance,
+                name=f'{self.stock_symbol} Return',
+                line=dict(color='blue', dash='dot')
+            ))
+            
             fig.update_layout(
-                title=f'Strategy vs S&P 500 Performance',
+                title=f'Strategy vs S&P 500 vs {self.stock_symbol} Performance',
                 xaxis_title='Date',
                 yaxis_title='Return (%)',
                 hovermode='x unified',
