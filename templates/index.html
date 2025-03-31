@@ -28,6 +28,10 @@
             display: none;
             color: red;
         }
+        .download-section {
+            margin-top: 20px;
+            text-align: right;
+        }
     </style>
 </head>
 <body>
@@ -56,6 +60,17 @@
                         <div class="col-md-6 mb-3">
                             <label for="stock_symbol" class="form-label">Stock Symbol</label>
                             <input type="text" class="form-control" id="stock_symbol" name="stock_symbol" required placeholder="e.g., AAPL">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="start_date" class="form-label">Start Date</label>
+                            <input type="date" class="form-control" id="start_date" name="start_date" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="end_date" class="form-label">End Date</label>
+                            <input type="date" class="form-control" id="end_date" name="end_date" required>
                         </div>
                     </div>
                     
@@ -109,6 +124,9 @@
                             <tbody id="last_trades"></tbody>
                         </table>
                     </div>
+                    <div class="download-section">
+                        <button id="downloadTrades" class="btn btn-success">Download All Trades (CSV)</button>
+                    </div>
                 </div>
             </div>
             
@@ -123,7 +141,17 @@
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        let allTrades = [];  // Store all trades globally
+        
         $(document).ready(function() {
+            // Set default dates (5 years ago to today)
+            const today = new Date();
+            const fiveYearsAgo = new Date();
+            fiveYearsAgo.setFullYear(today.getFullYear() - 5);
+            
+            $('#start_date').val(fiveYearsAgo.toISOString().split('T')[0]);
+            $('#end_date').val(today.toISOString().split('T')[0]);
+            
             $('#strategyForm').on('submit', function(e) {
                 e.preventDefault();
                 
@@ -148,6 +176,9 @@
                             $('.loading').hide();
                             return;
                         }
+                        
+                        // Store all trades
+                        allTrades = response.all_trades;
                         
                         // Update results
                         $('#initial_investment_result').text(response.initial_investment);
@@ -177,6 +208,31 @@
                     error: function(xhr, status, error) {
                         $('.error').text('An error occurred while analyzing the strategy.').show();
                         $('.loading').hide();
+                    }
+                });
+            });
+            
+            // Handle CSV download
+            $('#downloadTrades').on('click', function() {
+                $.ajax({
+                    url: '/download_trades',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ trades: allTrades }),
+                    success: function(response) {
+                        // Create a temporary link to download the file
+                        const blob = new Blob([response], { type: 'text/csv' });
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `trading_trades_${new Date().toISOString().slice(0,19).replace(/[:]/g, '')}.csv`;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                    },
+                    error: function(xhr, status, error) {
+                        $('.error').text('An error occurred while downloading the trades.').show();
                     }
                 });
             });

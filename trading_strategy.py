@@ -2,25 +2,34 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import mpld3
 
 __all__ = ['TradingStrategy']
 
 class TradingStrategy:
-    def __init__(self, initial_investment, shares_per_trade, consecutive_days, stock_symbol):
+    def __init__(self, initial_investment, shares_per_trade, consecutive_days, stock_symbol, start_date=None, end_date=None):
         self.initial_investment = initial_investment
         self.shares_per_trade = shares_per_trade
         self.consecutive_days = consecutive_days
         self.stock_symbol = stock_symbol
+        self.start_date = start_date
+        self.end_date = end_date
         self.portfolio = {
             'cash': initial_investment,
             'shares': 0,
             'trades': []
         }
         
-    def get_historical_data(self, years=5):
+    def get_historical_data(self):
         """Fetch historical data for the stock and S&P 500"""
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=years*365)
+        if self.start_date is None or self.end_date is None:
+            # Default to 5 years if no dates provided
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=5*365)
+        else:
+            start_date = datetime.strptime(self.start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(self.end_date, '%Y-%m-%d')
         
         # Get stock data
         stock = yf.Ticker(self.stock_symbol)
@@ -36,6 +45,12 @@ class TradingStrategy:
         """Run the trading strategy analysis"""
         # Get historical data
         stock_data, sp500_data = self.get_historical_data()
+        
+        if stock_data.empty or len(stock_data) == 0:
+            return {'error': f'No data available for {self.stock_symbol}'}
+            
+        if sp500_data.empty or len(sp500_data) == 0:
+            return {'error': 'Unable to fetch S&P 500 data'}
         
         # Initialize variables
         consecutive_up_days = 0
@@ -63,10 +78,10 @@ class TradingStrategy:
                         self.portfolio['cash'] += shares_to_sell * current_price
                         self.portfolio['shares'] -= shares_to_sell
                         self.portfolio['trades'].append({
-                            'date': date,
+                            'date': date.strftime('%Y-%m-%d'),
                             'action': 'SELL',
                             'shares': shares_to_sell,
-                            'price': current_price
+                            'price': f'${current_price:.2f}'
                         })
                 
                 elif consecutive_down_days >= self.consecutive_days:
@@ -80,10 +95,10 @@ class TradingStrategy:
                         self.portfolio['cash'] -= cost
                         self.portfolio['shares'] += shares_to_buy
                         self.portfolio['trades'].append({
-                            'date': date,
+                            'date': date.strftime('%Y-%m-%d'),
                             'action': 'BUY',
                             'shares': shares_to_buy,
-                            'price': current_price
+                            'price': f'${current_price:.2f}'
                         })
             
             last_price = current_price
@@ -100,9 +115,10 @@ class TradingStrategy:
         plot_html = self.create_performance_plot(stock_data, portfolio_values, sp500_data)
         
         return {
-            'final_value': final_value,
-            'total_return': total_return,
-            'sp500_return': sp500_return,
+            'initial_investment': f'${self.initial_investment:,.2f}',
+            'final_value': f'${final_value:,.2f}',
+            'total_return': f'{total_return:.2f}%',
+            'sp500_return': f'{sp500_return:.2f}%',
             'number_of_trades': len(self.portfolio['trades']),
             'last_trades': self.portfolio['trades'][-5:],
             'plot_html': plot_html
