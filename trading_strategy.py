@@ -36,33 +36,43 @@ class TradingStrategy:
         
     def get_historical_data(self):
         """Fetch historical data for the stock and S&P 500"""
-        if self.start_date is None or self.end_date is None:
-            # Default to 5 years if no dates provided
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=5*365)
-        else:
-            start_date = datetime.strptime(self.start_date, '%Y-%m-%d')
-            end_date = datetime.strptime(self.end_date, '%Y-%m-%d')
-        
-        # Get stock data
-        stock = yf.Ticker(self.stock_symbol)
-        stock_df = stock.history(start=start_date, end=end_date)
-        
-        # Get S&P 500 data
-        sp500 = yf.Ticker('^GSPC')
-        sp500_df = sp500.history(start=start_date, end=end_date)
-        
-        return stock_df, sp500_df
+        try:
+            if self.start_date is None or self.end_date is None:
+                # Default to 5 years if no dates provided
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=5*365)
+            else:
+                start_date = datetime.strptime(self.start_date, '%Y-%m-%d')
+                end_date = datetime.strptime(self.end_date, '%Y-%m-%d')
+            
+            # Get stock data
+            stock = yf.Ticker(self.stock_symbol)
+            stock_df = stock.history(start=start_date, end=end_date)
+            
+            if stock_df.empty:
+                return None, None, f'No data available for {self.stock_symbol}'
+            
+            # Get S&P 500 data
+            sp500 = yf.Ticker('^GSPC')
+            sp500_df = sp500.history(start=start_date, end=end_date)
+            
+            if sp500_df.empty:
+                return None, None, 'Unable to fetch S&P 500 data'
+            
+            return stock_df, sp500_df, None
+            
+        except Exception as e:
+            return None, None, f'Error fetching data: {str(e)}'
     
     def analyze(self):
         """Run the trading strategy analysis"""
         # Get historical data
-        stock_data, sp500_data = self.get_historical_data()
+        stock_data, sp500_data, error = self.get_historical_data()
         
-        if stock_data.empty or len(stock_data) == 0:
+        if stock_data is None or len(stock_data) == 0:
             return {'error': f'No data available for {self.stock_symbol}'}
             
-        if sp500_data.empty or len(sp500_data) == 0:
+        if sp500_data is None or len(sp500_data) == 0:
             return {'error': 'Unable to fetch S&P 500 data'}
         
         # Initialize variables

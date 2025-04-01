@@ -20,8 +20,8 @@ def analyze():
         shares_large_move = int(request.form['shares_large_move'])
         consecutive_days = int(request.form['consecutive_days'])
         stock_symbol = request.form['stock_symbol'].upper()
-        start_date = request.form['start_date']
-        end_date = request.form['end_date']
+        start_date = request.form.get('start_date')
+        end_date = request.form.get('end_date')
         
         # Create strategy instance
         strategy = TradingStrategy(
@@ -37,13 +37,14 @@ def analyze():
         # Run analysis
         results = strategy.analyze()
         
-        # Add all trades to the results
-        results['all_trades'] = strategy.portfolio['trades']
-        
-        return jsonify(results)
+        if 'error' in results:
+            return render_template('index.html', error=results['error'])
+            
+        return render_template('index.html', results=results)
         
     except Exception as e:
-        return jsonify({'error': str(e)})
+        app.logger.error(f"Error in analyze route: {str(e)}")
+        return render_template('index.html', error=f"An error occurred: {str(e)}")
 
 @app.route('/download_trades', methods=['POST'])
 def download_trades():
