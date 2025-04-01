@@ -3,9 +3,16 @@ from trading_strategy import TradingStrategy
 import os
 import pandas as pd
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, timedelta
+import logging
 
 app = Flask(__name__)
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 @app.route('/')
 def index():
@@ -23,6 +30,8 @@ def analyze():
         start_date = request.form.get('start_date')
         end_date = request.form.get('end_date')
         
+        logger.info(f"Starting analysis for {stock_symbol}")
+        
         # Create strategy instance
         strategy = TradingStrategy(
             initial_investment=initial_investment,
@@ -34,16 +43,22 @@ def analyze():
             end_date=end_date
         )
         
-        # Run analysis
-        results = strategy.analyze()
+        # Run analysis with timeout
+        try:
+            results = strategy.analyze()
+        except Exception as e:
+            logger.error(f"Error during strategy analysis: {str(e)}")
+            return render_template('index.html', error=f"Error during analysis: {str(e)}")
         
         if 'error' in results:
+            logger.error(f"Strategy returned error: {results['error']}")
             return render_template('index.html', error=results['error'])
             
+        logger.info("Analysis completed successfully")
         return render_template('index.html', results=results)
         
     except Exception as e:
-        app.logger.error(f"Error in analyze route: {str(e)}")
+        logger.error(f"Error in analyze route: {str(e)}")
         return render_template('index.html', error=f"An error occurred: {str(e)}")
 
 @app.route('/download_trades', methods=['POST'])

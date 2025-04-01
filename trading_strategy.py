@@ -45,23 +45,35 @@ class TradingStrategy:
                 start_date = datetime.strptime(self.start_date, '%Y-%m-%d')
                 end_date = datetime.strptime(self.end_date, '%Y-%m-%d')
             
-            # Get stock data
+            print(f"Fetching data for {self.stock_symbol} from {start_date} to {end_date}")
+            
+            # Get stock data with timeout
+            print(f"Initializing yfinance Ticker for {self.stock_symbol}")
             stock = yf.Ticker(self.stock_symbol)
-            stock_df = stock.history(start=start_date, end=end_date)
+            print(f"Fetching history for {self.stock_symbol}")
+            stock_df = stock.history(start=start_date, end=end_date, timeout=30)
             
             if stock_df.empty:
+                print(f"No data returned for {self.stock_symbol}")
                 return None, None, f'No data available for {self.stock_symbol}'
             
-            # Get S&P 500 data
+            print(f"Successfully fetched {len(stock_df)} days of stock data")
+            
+            # Get S&P 500 data with timeout
+            print("Initializing yfinance Ticker for S&P 500")
             sp500 = yf.Ticker('^GSPC')
-            sp500_df = sp500.history(start=start_date, end=end_date)
+            print("Fetching S&P 500 history")
+            sp500_df = sp500.history(start=start_date, end=end_date, timeout=30)
             
             if sp500_df.empty:
+                print("No S&P 500 data returned")
                 return None, None, 'Unable to fetch S&P 500 data'
             
+            print(f"Successfully fetched {len(sp500_df)} days of S&P 500 data")
             return stock_df, sp500_df, None
             
         except Exception as e:
+            print(f"Error in get_historical_data: {str(e)}")
             return None, None, f'Error fetching data: {str(e)}'
     
     def analyze(self):
