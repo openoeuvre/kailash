@@ -2,25 +2,47 @@ import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import mpld3
 
 __all__ = ['TradingStrategy']
 
 class TradingStrategy:
-    def __init__(self, initial_investment, shares_per_trade, consecutive_days, stock_symbol):
+    def __init__(self, initial_investment, shares_small_move, shares_large_move, consecutive_days, stock_symbol, start_date=None, end_date=None):
         self.initial_investment = initial_investment
-        self.shares_per_trade = shares_per_trade
+        self.shares_small_move = shares_small_move
+        self.shares_large_move = shares_large_move
         self.consecutive_days = consecutive_days
         self.stock_symbol = stock_symbol
+        self.start_date = start_date
+        self.end_date = end_date
         self.portfolio = {
             'cash': initial_investment,
             'shares': 0,
             'trades': []
         }
         
-    def get_historical_data(self, years=5):
+    def calculate_price_movement(self, stock_data, start_idx):
+        """Calculate the percentage movement over consecutive days"""
+        start_price = stock_data['Close'].iloc[start_idx]
+        end_price = stock_data['Close'].iloc[start_idx + self.consecutive_days]
+        return ((end_price - start_price) / start_price) * 100
+        
+    def get_shares_to_trade(self, price_movement):
+        """Determine number of shares to trade based on price movement"""
+        if abs(price_movement) >= 5:
+            return self.shares_large_move
+        return self.shares_small_move
+        
+    def get_historical_data(self):
         """Fetch historical data for the stock and S&P 500"""
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=years*365)
+        if self.start_date is None or self.end_date is None:
+            # Default to 5 years if no dates provided
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=5*365)
+        else:
+            start_date = datetime.strptime(self.start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(self.end_date, '%Y-%m-%d')
         
         # Get stock data
         stock = yf.Ticker(self.stock_symbol)
@@ -37,14 +59,21 @@ class TradingStrategy:
         # Get historical data
         stock_data, sp500_data = self.get_historical_data()
         
+        if stock_data.empty or len(stock_data) == 0:
+            return {'error': f'No data available for {self.stock_symbol}'}
+            
+        if sp500_data.empty or len(sp500_data) == 0:
+            return {'error': 'Unable to fetch S&P 500 data'}
+        
         # Initialize variables
         consecutive_up_days = 0
         consecutive_down_days = 0
         last_price = None
         
         # Iterate through each day
-        for date, row in stock_data.iterrows():
-            current_price = row['Close']
+        for i in range(len(stock_data) - self.consecutive_days):
+            current_date = stock_data.index[i]
+            current_price = stock_data['Close'].iloc[i]
             
             if last_price is not None:
                 # Check if price increased or decreased
@@ -57,22 +86,31 @@ class TradingStrategy:
                 
                 # Trading logic
                 if consecutive_up_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Sell if we have shares
                     if self.portfolio['shares'] > 0:
-                        shares_to_sell = min(self.portfolio['shares'], self.shares_per_trade)
+                        shares_to_sell = min(self.portfolio['shares'], shares_to_trade)
                         self.portfolio['cash'] += shares_to_sell * current_price
                         self.portfolio['shares'] -= shares_to_sell
                         self.portfolio['trades'].append({
-                            'date': date,
+                            'date': current_date.strftime('%Y-%m-%d'),
                             'action': 'SELL',
                             'shares': shares_to_sell,
-                            'price': current_price
+                            'price': f'${current_price:.2f}',
+                            'price_movement': f'{price_movement:.2f}%'
                         })
                 
                 elif consecutive_down_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Buy if we have enough cash
                     shares_to_buy = min(
-                        self.shares_per_trade,
+                        shares_to_trade,
                         int(self.portfolio['cash'] / current_price)
                     )
                     if shares_to_buy > 0:
@@ -80,10 +118,11 @@ class TradingStrategy:
                         self.portfolio['cash'] -= cost
                         self.portfolio['shares'] += shares_to_buy
                         self.portfolio['trades'].append({
-                            'date': date,
+                            'date': current_date.strftime('%Y-%m-%d'),
                             'action': 'BUY',
                             'shares': shares_to_buy,
-                            'price': current_price
+                            'price': f'${current_price:.2f}',
+                            'price_movement': f'{price_movement:.2f}%'
                         })
             
             last_price = current_price
@@ -100,12 +139,14 @@ class TradingStrategy:
         plot_html = self.create_performance_plot(stock_data, portfolio_values, sp500_data)
         
         return {
-            'final_value': final_value,
-            'total_return': total_return,
-            'sp500_return': sp500_return,
+            'initial_investment': f'${self.initial_investment:,.2f}',
+            'final_value': f'${final_value:,.2f}',
+            'total_return': f'{total_return:.2f}%',
+            'sp500_return': f'{sp500_return:.2f}%',
             'number_of_trades': len(self.portfolio['trades']),
             'last_trades': self.portfolio['trades'][-5:],
-            'plot_html': plot_html
+            'plot_html': plot_html,
+            'all_trades': self.portfolio['trades']
         }
     
     def calculate_portfolio_value_over_time(self, stock_data):
@@ -119,8 +160,9 @@ class TradingStrategy:
         consecutive_down_days = 0
         last_price = None
         
-        for date, row in stock_data.iterrows():
-            current_price = row['Close']
+        for i in range(len(stock_data)):
+            current_date = stock_data.index[i]
+            current_price = stock_data['Close'].iloc[i]
             
             if last_price is not None:
                 # Check if price increased or decreased
@@ -133,16 +175,24 @@ class TradingStrategy:
                 
                 # Trading logic
                 if consecutive_up_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Sell if we have shares
                     if current_shares > 0:
-                        shares_to_sell = min(current_shares, self.shares_per_trade)
+                        shares_to_sell = min(current_shares, shares_to_trade)
                         current_cash += shares_to_sell * current_price
                         current_shares -= shares_to_sell
                 
                 elif consecutive_down_days >= self.consecutive_days:
+                    # Calculate price movement
+                    price_movement = self.calculate_price_movement(stock_data, i - self.consecutive_days + 1)
+                    shares_to_trade = self.get_shares_to_trade(price_movement)
+                    
                     # Buy if we have enough cash
                     shares_to_buy = min(
-                        self.shares_per_trade,
+                        shares_to_trade,
                         int(current_cash / current_price)
                     )
                     if shares_to_buy > 0:
@@ -151,22 +201,27 @@ class TradingStrategy:
                         current_shares += shares_to_buy
             
             # Update portfolio value for this day
-            portfolio_values.loc[date, 'value'] = current_cash + (current_shares * current_price)
+            portfolio_values.loc[current_date, 'value'] = current_cash + (current_shares * current_price)
             last_price = current_price
         
+        # Calculate percentage change from initial investment
         portfolio_values['pct_change'] = ((portfolio_values['value'] - self.initial_investment) / self.initial_investment) * 100
         return portfolio_values
     
     def create_performance_plot(self, stock_data, portfolio_values, sp500_data):
-        """Create an interactive plot comparing strategy and S&P 500 returns"""
+        """Create an interactive plot comparing strategy, S&P 500, and stock returns"""
         try:
             # Calculate S&P 500 performance
             sp500_performance = ((sp500_data['Close'] - sp500_data['Close'].iloc[0]) / sp500_data['Close'].iloc[0]) * 100
+            
+            # Calculate stock performance
+            stock_performance = ((stock_data['Close'] - stock_data['Close'].iloc[0]) / stock_data['Close'].iloc[0]) * 100
             
             # Ensure dates are aligned
             common_dates = stock_data.index.intersection(sp500_data.index)
             portfolio_values = portfolio_values.loc[common_dates]
             sp500_performance = sp500_performance.loc[common_dates]
+            stock_performance = stock_performance.loc[common_dates]
             
             fig = go.Figure()
             
@@ -186,8 +241,16 @@ class TradingStrategy:
                 line=dict(color='red', dash='dash')
             ))
             
+            # Add stock return line
+            fig.add_trace(go.Scatter(
+                x=stock_performance.index,
+                y=stock_performance,
+                name=f'{self.stock_symbol} Return',
+                line=dict(color='blue', dash='dot')
+            ))
+            
             fig.update_layout(
-                title=f'Strategy vs S&P 500 Performance',
+                title=f'Strategy vs S&P 500 vs {self.stock_symbol} Performance',
                 xaxis_title='Date',
                 yaxis_title='Return (%)',
                 hovermode='x unified',
