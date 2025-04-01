@@ -4,6 +4,9 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import mpld3
+import time
+import requests
+from requests.exceptions import RequestException
 
 __all__ = ['TradingStrategy']
 
@@ -21,6 +24,23 @@ class TradingStrategy:
             'shares': 0,
             'trades': []
         }
+        
+    def fetch_with_retry(self, ticker, start_date, end_date, max_retries=3):
+        """Fetch data with retry logic"""
+        for attempt in range(max_retries):
+            try:
+                print(f"Attempt {attempt + 1} to fetch data for {ticker}")
+                stock = yf.Ticker(ticker)
+                df = stock.history(start=start_date, end=end_date, timeout=30)
+                if not df.empty:
+                    return df
+                time.sleep(2)  # Wait before retry
+            except Exception as e:
+                print(f"Error on attempt {attempt + 1}: {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)  # Wait before retry
+                continue
+        return None
         
     def calculate_price_movement(self, stock_data, start_idx):
         """Calculate the percentage movement over consecutive days"""
@@ -47,25 +67,17 @@ class TradingStrategy:
             
             print(f"Fetching data for {self.stock_symbol} from {start_date} to {end_date}")
             
-            # Get stock data with timeout
-            print(f"Initializing yfinance Ticker for {self.stock_symbol}")
-            stock = yf.Ticker(self.stock_symbol)
-            print(f"Fetching history for {self.stock_symbol}")
-            stock_df = stock.history(start=start_date, end=end_date, timeout=30)
-            
-            if stock_df.empty:
+            # Get stock data with retry
+            stock_df = self.fetch_with_retry(self.stock_symbol, start_date, end_date)
+            if stock_df is None or stock_df.empty:
                 print(f"No data returned for {self.stock_symbol}")
                 return None, None, f'No data available for {self.stock_symbol}'
             
             print(f"Successfully fetched {len(stock_df)} days of stock data")
             
-            # Get S&P 500 data with timeout
-            print("Initializing yfinance Ticker for S&P 500")
-            sp500 = yf.Ticker('^GSPC')
-            print("Fetching S&P 500 history")
-            sp500_df = sp500.history(start=start_date, end=end_date, timeout=30)
-            
-            if sp500_df.empty:
+            # Get S&P 500 data with retry
+            sp500_df = self.fetch_with_retry('^GSPC', start_date, end_date)
+            if sp500_df is None or sp500_df.empty:
                 print("No S&P 500 data returned")
                 return None, None, 'Unable to fetch S&P 500 data'
             
