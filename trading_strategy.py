@@ -30,15 +30,29 @@ class TradingStrategy:
         for attempt in range(max_retries):
             try:
                 print(f"Attempt {attempt + 1} to fetch data for {ticker}")
+                # Create a new Ticker instance for each attempt
                 stock = yf.Ticker(ticker)
-                df = stock.history(start=start_date, end=end_date, timeout=30)
+                
+                # Try to get info first to validate the ticker
+                info = stock.info
+                if not info:
+                    print(f"No info available for {ticker}")
+                    time.sleep(2)
+                    continue
+                
+                # Fetch the data with a longer timeout
+                df = stock.history(start=start_date, end=end_date, timeout=60)
+                
                 if not df.empty:
+                    print(f"Successfully fetched {len(df)} rows for {ticker}")
                     return df
-                time.sleep(2)  # Wait before retry
+                else:
+                    print(f"Empty dataframe returned for {ticker}")
+                    time.sleep(2)
             except Exception as e:
-                print(f"Error on attempt {attempt + 1}: {str(e)}")
+                print(f"Error on attempt {attempt + 1} for {ticker}: {str(e)}")
                 if attempt < max_retries - 1:
-                    time.sleep(2)  # Wait before retry
+                    time.sleep(2)
                 continue
         return None
         
